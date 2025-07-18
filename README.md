@@ -50,6 +50,7 @@ E --> |jsonResponse|
 
 ---
 
+
 ## ▶️ Como Rodar
 
 1. Clone o projeto
@@ -70,6 +71,7 @@ npm install
 BRADESCO_API_URL=endereco_api_bradesco
 BRADESCO_CLIENT_ID=seu_client_id
 BRADESCO_PRIVATE_KEY=nome_arquivo_chave_privada
+#PORT=3000 #Opcional
 ```
 
 4. Gerar as chaves **pública e privada** para testes ou colocar na pasta **keys**
@@ -94,7 +96,7 @@ cp public_key.pem_example public_key
 npm run dev
 ```
 
-7. Teste a rota
+7. Teste a rota, por padrão 3000 ou definido no .env
 
 ```bash
 curl http://localhost:3000/api
@@ -123,4 +125,5 @@ curl http://localhost:3000/api
 
 ## ✍️ Autor
 
-Feito por p — [contato@exemplo.com](mailto\:contato@exemplo.com)
+Feito por Janilson — [janilson.silva@ecosysauto.com.br](mailto\:contato@exemplo.com)
+

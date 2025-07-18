@@ -1,145 +1,83 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
 import fs from 'fs';
-import jwt from 'jsonwebtoken';
-import path from 'path';
-import {importPKCS8} from 'jose';
 import {Request, Response} from "express";
 import {PreAnaliseOutputPort} from '../../ports/output/PreAnaliseOutputPort';
+import {createPrivateKey, createSign} from "node:crypto";
 
 dotenv.config();
 
 export class BradescoPreAnaliseAdapter implements PreAnaliseOutputPort {
     private clientId = process.env.BRADESCO_CLIENT_ID;
-    private apí = '/v2/pre-analise/validar';
-    private apiUrl = process.env.BRADESCO_API_URL + this.apí;
+    private api = '/v2/pre-analise/validar';
+    private apiUrl = process.env.BRADESCO_API_URL + this.api;
     private privateKey = __dirname + '/../../keys/' + process.env.BRADESCO_PRIVATE_KEY;
-    private header = {alg: "RS256", typ: "JWT"};
-    // private payload: JWTPayload = {
-    //     aud: this.tokenUrl,
-    //     sub: this.clientId,
-    //     ver: "1.1"
-    // };
 
     async action(req: Request, res: Response): Promise<any> {
         const token = req.header('authorization')?.toString().replace('Bearer ', '');
         const body = req.body;
-        const date = new Date;
-        const payload = `POST
-${this.apí}
-\n
-${JSON.stringify(body)}
-${token}
-${date.getMilliseconds()}
-${date.getTime()}
-SHA256`;
+        const date = new Date();
+        const nonce = req.header('jti')?.toString() ?? date.getTime().toString();
+        const bodyStr = JSON.stringify(body).replace(/\s+/g, '');
+        // const nonce = date.getTime().toString();
+        const timestamp = date.toISOString().split('.')[0] + '-00:00';
 
-        const jwt = this.jwt(payload);
+        const assinaturaPayload = [
+            'POST',
+            this.api,
+            '',
+            bodyStr,
+            token,
+            nonce,
+            timestamp,
+            'SHA256'
+        ].join('\n');
+
+        const assinatura = await this.assinarXBrad(assinaturaPayload);
+
+        // console.log('request.txt: ', assinatura);
 
         const headers = {
             'Authorization': 'Bearer ' + token,
-            'X-Brad-Nonce': date.getMilliseconds(),
-            'X-Brad-Signature': jwt,
-            'X-Brad-Timestamp': date.getTime(),
+            'X-Brad-Signature': assinatura,
+            'X-Brad-Nonce': nonce,
+            'X-Brad-Timestamp': timestamp,
             'X-Brad-Algorithm': 'SHA256',
-            'access-token': this.clientId,
+            'access-token': this.clientId
         };
 
         try {
-
-            /* Para testes */
-            return this.mock()
-
-            /* Original */
-            // const response = await axios.post(this.apiUrl, body, {headers});
-            // return response.data;
+            console.log('request.txt: ', assinaturaPayload);
+            console.log('Url:', this.apiUrl);
+            console.log('Headers:', headers);
+            console.log('Body:', body);
+            const response = await axios.post(this.apiUrl, body, {headers});
+            return response.data;
         } catch (error: any) {
+            console.log(error);
             console.error('Erro na autenticação com Bradesco:', error.response?.data || error.message);
-            throw new Error('Erro ao acessar a api.');
+            throw new Error('Erro ao acessar a api');
         }
     }
 
-    jwt(payload: string): string {
-        const chavePrivadaPem = fs.readFileSync(path.resolve(this.privateKey), 'utf8');
-
-        return jwt.sign(payload, chavePrivadaPem, {
-            algorithm: 'RS256', // Ou outro, conforme exigido pela API
-            header: this.header
+    async carregarChavePrivada(): Promise<any> {
+        const pem = fs.readFileSync(this.privateKey!, 'utf8');
+        return createPrivateKey({
+            key: pem,
+            format: 'pem',
+            type: 'pkcs1',
         });
+
     }
 
-    mock() {
-        return [
-            {
-                "codigoResultadoAnalise": "",
-                "dataAnoSolicitacao": "",
-                "descricaoMotivoRecusa": "",
-                "numeroPropostaRccp": "",
-                "valorEntradaSugerida": ""
-            },
-            {
-                "codigoResultadoAnalise": "",
-                "dataAnoSolicitacao": "",
-                "descricaoMotivoRecusa": "",
-                "numeroPropostaRccp": "",
-                "valorEntradaSugerida": ""
-            },
-            {
-                "codigoResultadoAnalise": "",
-                "dataAnoSolicitacao": "",
-                "descricaoMotivoRecusa": "",
-                "numeroPropostaRccp": "",
-                "valorEntradaSugerida": ""
-            },
-            {
-                "codigoResultadoAnalise": "",
-                "dataAnoSolicitacao": "",
-                "descricaoMotivoRecusa": "",
-                "numeroPropostaRccp": "",
-                "valorEntradaSugerida": ""
-            },
-            {
-                "codigoResultadoAnalise": "",
-                "dataAnoSolicitacao": "",
-                "descricaoMotivoRecusa": "",
-                "numeroPropostaRccp": "",
-                "valorEntradaSugerida": ""
-            },
-            {
-                "codigoResultadoAnalise": "",
-                "dataAnoSolicitacao": "",
-                "descricaoMotivoRecusa": "",
-                "numeroPropostaRccp": "",
-                "valorEntradaSugerida": ""
-            },
-            {
-                "codigoResultadoAnalise": "",
-                "dataAnoSolicitacao": "",
-                "descricaoMotivoRecusa": "",
-                "numeroPropostaRccp": "",
-                "valorEntradaSugerida": ""
-            },
-            {
-                "codigoResultadoAnalise": "",
-                "dataAnoSolicitacao": "",
-                "descricaoMotivoRecusa": "",
-                "numeroPropostaRccp": "",
-                "valorEntradaSugerida": ""
-            },
-            {
-                "codigoResultadoAnalise": "",
-                "dataAnoSolicitacao": "",
-                "descricaoMotivoRecusa": "",
-                "numeroPropostaRccp": "",
-                "valorEntradaSugerida": ""
-            },
-            {
-                "codigoResultadoAnalise": "",
-                "dataAnoSolicitacao": "",
-                "descricaoMotivoRecusa": "",
-                "numeroPropostaRccp": "",
-                "valorEntradaSugerida": ""
-            }
-        ];
+    async assinarXBrad(payload: string): Promise<string> {
+        const key = await this.carregarChavePrivada();
+        const data = new TextEncoder().encode(payload);
+
+        const sign = createSign('RSA-SHA256');
+        sign.update(data);
+        sign.end();
+
+        return sign.sign(key, 'base64');
     }
 }
